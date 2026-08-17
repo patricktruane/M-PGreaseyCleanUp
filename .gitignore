@@ -22,3 +22,6 @@ src/routeTree.gen.ts
 
 # Runtime lead data (customer contact info) — never commit.
 /data/
+
+# Local VS Code settings (machine-specific) — never commit.
+.vscode/settings.local.json
