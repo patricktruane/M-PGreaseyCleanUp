@@ -602,15 +602,22 @@ function BusinessBadge({ businessType }: { businessType: string }) {
 /** Small chips showing where the lead came from + service requested (quote leads). */
 function SourceServiceBadges({ lead }: { lead: Lead }) {
   const isQuote = (lead.source ?? "early-access") === "quote";
+  const isSms = lead.source === "sms";
   return (
     <>
-      <span
-        className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-          isQuote ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"
-        }`}
-      >
-        {isQuote ? "Quote request" : "Early access"}
-      </span>
+      {isSms ? (
+        <span className="inline-flex rounded-full bg-emerald-100 px-2.5 py-0.5 text-[11px] font-semibold text-emerald-700">
+          SMS
+        </span>
+      ) : (
+        <span
+          className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+            isQuote ? "bg-violet-100 text-violet-700" : "bg-slate-100 text-slate-500"
+          }`}
+        >
+          {isQuote ? "Quote request" : "Early access"}
+        </span>
+      )}
       {lead.service && (
         <span className="inline-flex rounded-full bg-sky-100 px-2.5 py-0.5 text-[11px] font-semibold text-sky-700">
           {lead.service}

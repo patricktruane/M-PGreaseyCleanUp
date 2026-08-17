@@ -1,6 +1,6 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
-import type { Lead } from "./leads";
+import type { Lead, SmsMessage } from "./leads";
 
 /* ------------------------------------------------------------------ */
 /* Server-only lead storage: data/leads.json                           */
@@ -55,7 +55,20 @@ function normalizeLead(raw: unknown): Lead | null {
       typeof r.source === "string" && r.source.trim() ? r.source : "early-access",
     service: typeof r.service === "string" ? r.service : undefined,
     company: typeof r.company === "string" ? r.company : undefined,
+    // SMS agent fields — kept only when present (backward compatible).
+    score: typeof r.score === "string" ? r.score : undefined,
+    messages: Array.isArray(r.messages) ? r.messages.filter(isSmsMessage) : undefined,
   };
+}
+
+function isSmsMessage(m: unknown): m is SmsMessage {
+  if (!m || typeof m !== "object") return false;
+  const r = m as Record<string, unknown>;
+  return (
+    (r.direction === "inbound" || r.direction === "outbound") &&
+    typeof r.body === "string" &&
+    typeof r.at === "string"
+  );
 }
 
 function enqueueWrite(mutator: (leads: Lead[]) => Lead[]): Promise<Lead[] | null> {
@@ -83,4 +96,72 @@ export function setLeadStatus(id: string, status: string): Promise<Lead[]> {
   return enqueueWrite((leads) =>
     leads.map((l) => (l.id === id ? { ...l, status } : l))
   ).then((updated) => updated ?? []);
+}
+
+/* ------------------------------------------------------------------ */
+/* SMS conversations                                                   */
+/* ------------------------------------------------------------------ */
+
+export type UpsertSmsResult = {
+  lead: Lead | null;
+  /** True when the phone number had no lead yet (first contact). */
+  isNew: boolean;
+};
+
+/**
+ * Upsert a lead by phone for an inbound SMS + the reply we're sending.
+ * First contact creates the lead (source "sms", status "New"); later
+ * messages from the same number update that lead's conversation — never
+ * duplicate. Both the inbound text and the outbound reply are appended to
+ * the lead's `messages` log. Runs through the same serialized write queue
+ * as every other write, so concurrent form submissions can't corrupt the
+ * file. Callers must pass the outbound message only when the inbound was
+ * actually processed (webhook-retry dedupe by MessageSid happens before
+ * this is called — see sms-handler.ts).
+ */
+export function upsertSmsLead(input: {
+  phone: string; // E.164 From number — the lead key
+  inbound: SmsMessage;
+  outbound: SmsMessage;
+  score: string; // hot | warm | cold
+  businessType: string; // detected trade or ""
+}): Promise<UpsertSmsResult> {
+  const norm = (p: string) => p.replace(/[^\d+]/g, "");
+  const key = norm(input.phone);
+  let isNew = false;
+
+  return enqueueWrite((leads) => {
+    const idx = leads.findIndex((l) => l.phone && norm(l.phone) === key);
+    if (idx >= 0) {
+      const existing = leads[idx];
+      const updated: Lead = {
+        ...existing,
+        phone: input.phone,
+        message: input.inbound.body,
+        score: input.score,
+        businessType: input.businessType || existing.businessType,
+        messages: [...(existing.messages ?? []), input.inbound, input.outbound],
+      };
+      return leads.map((l) => (l === existing ? updated : l));
+    }
+    isNew = true;
+    const created: Lead = {
+      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      name: "",
+      businessType: input.businessType,
+      phone: input.phone,
+      email: "",
+      message: input.inbound.body,
+      createdAt: input.inbound.at,
+      status: "New",
+      source: "sms",
+      score: input.score,
+      messages: [input.inbound, input.outbound],
+    };
+    return [...leads, created];
+  }).then((next) => {
+    const list = next ?? [];
+    const lead = list.find((l) => l.phone && norm(l.phone) === key) ?? null;
+    return { lead, isNew };
+  });
 }

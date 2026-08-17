@@ -6,8 +6,22 @@ export const STATUSES = ["New", "Contacted", "Qualified", "Booked"] as const;
 export type LeadStatus = (typeof STATUSES)[number];
 
 /** Where a lead came in from. Existing entries without a source default to "early-access". */
-export const LEAD_SOURCES = ["early-access", "quote"] as const;
+export const LEAD_SOURCES = ["early-access", "quote", "sms"] as const;
 export type LeadSource = (typeof LEAD_SOURCES)[number];
+
+/** Rule-based SMS qualification tiers (see src/lib/sms.ts for the keyword rules). */
+export const LEAD_SCORES = ["hot", "warm", "cold"] as const;
+export type LeadScore = (typeof LEAD_SCORES)[number];
+
+/** One side of an SMS conversation, logged on the lead. */
+export type SmsMessage = {
+  direction: "inbound" | "outbound";
+  body: string;
+  /** ISO timestamp of the message. */
+  at: string;
+  /** Twilio's message id — inbound only, used to dedupe webhook retries. */
+  messageSid?: string;
+};
 
 /** Services offered on the business-site quote form. */
 export const QUOTE_SERVICES = [
@@ -30,7 +44,9 @@ export type Lead = {
   createdAt: string;
   status?: string;
   /* Optional fields (backward compatible — old leads simply won't have them). */
-  source?: string; // "early-access" | "quote" (default "early-access" for existing entries)
+  source?: string; // "early-access" | "quote" | "sms" (default "early-access" for existing entries)
   service?: string; // quote leads: service requested
   company?: string; // quote leads: company name (optional)
+  score?: string; // sms leads: "hot" | "warm" | "cold" from rule-based qualification
+  messages?: SmsMessage[]; // sms leads: full conversation log (inbound + outbound)
 };
