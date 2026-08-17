@@ -1,12 +1,16 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
+"use client";
+
+/* ------------------------------------------------------------------ */
+/* M&P Greasey Clean Up — business home page ("/").                     */
+/* Ported 1:1 from the TanStack Start route src/routes/index.tsx.       */
+/* Quote-request submissions POST to /api/quote (route handler).        */
+/* ------------------------------------------------------------------ */
 import { useCallback, useRef, useState } from "react";
 import type { FormEvent, ReactNode } from "react";
-import { appendLead } from "~/lib/leads-store";
 import { QUOTE_SERVICES } from "~/lib/leads";
 
 /* ------------------------------------------------------------------ */
-/* Server: quote-request form submission                               */
+/* Quote-request form submission (server fn → /api/quote route handler) */
 /* ------------------------------------------------------------------ */
 
 type QuoteSubmission = {
@@ -19,71 +23,18 @@ type QuoteSubmission = {
 
 type SubmitResult = { ok: boolean; error?: string };
 
-// MVP storage: data/leads.json, written through the shared serialized queue in
-// ~/lib/leads-store (same write pattern the early-access form and dashboard
-// use). SITE.md documents the path to a real database (Neon via DATABASE_URL).
-// Quote leads land in the same store as early-access leads, so they show up in
-// the /dashboard leads dashboard with source "quote" + status "New".
-
-const submitQuote = createServerFn({ method: "POST" })
-  .validator((d: unknown) => d as QuoteSubmission)
-  .handler(async ({ data }): Promise<SubmitResult> => {
-    try {
-      const name = String(data?.name ?? "").trim();
-      const company = String(data?.company ?? "").trim();
-      const phone = String(data?.phone ?? "").trim();
-      const service = String(data?.service ?? "").trim();
-      const siteDetails = String(data?.siteDetails ?? "").trim();
-
-      if (!name) return { ok: false, error: "Please enter your name." };
-      if (!phone)
-        return { ok: false, error: "Add a phone number so the crew can call you back." };
-      if (!service || !(QUOTE_SERVICES as readonly string[]).includes(service))
-        return { ok: false, error: "Please pick the service you need." };
-      if (
-        name.length > 120 ||
-        company.length > 120 ||
-        phone.length > 40 ||
-        service.length > 80 ||
-        siteDetails.length > 2000
-      ) {
-        return {
-          ok: false,
-          error: "One of the fields is too long — please shorten it and try again.",
-        };
-      }
-
-      await appendLead({
-        id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-        name,
-        businessType: "Grease & cleanup",
-        phone,
-        email: "",
-        message: siteDetails,
-        createdAt: new Date().toISOString(),
-        status: "New",
-        source: "quote",
-        service,
-        company: company || undefined,
-      });
-
-      return { ok: true };
-    } catch (err) {
-      console.error("submitQuote error:", err);
-      return {
-        ok: false,
-        error: "Something went wrong on our end — please try again.",
-      };
-    }
-  });
-
-/* ------------------------------------------------------------------ */
-/* Route                                                               */
-/* ------------------------------------------------------------------ */
-
-export const Route = createFileRoute("/")({
-  component: Home,
-});
+async function submitQuote(data: QuoteSubmission): Promise<SubmitResult> {
+  try {
+    const res = await fetch("/api/quote", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
+    });
+    return (await res.json()) as SubmitResult;
+  } catch {
+    return { ok: false, error: "Something went wrong — please try again." };
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
@@ -372,7 +323,7 @@ function BeforeAfterSlider() {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-function Home() {
+export default function Home() {
   return (
     <div id="top" className="min-h-dvh bg-white text-slate-900">
       <Nav />
@@ -469,7 +420,7 @@ function Hero() {
             </span>
           </h1>
           <p className="mt-6 max-w-xl text-lg leading-relaxed text-slate-300">
-            M &amp; P Greasey Clean Up Inc handles the grease your facility can't afford to
+            M &amp; P Greasey Clean Up Inc handles the grease your facility can&apos;t afford to
             ignore — commercial kitchens, hoods, traps, and industrial surfaces, cleaned and
             documented to code.
           </p>
@@ -528,7 +479,7 @@ function WhatWeDo() {
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-slate-600">
             Grease is a different problem than dirt. It builds, it hides, and it becomes a fire
-            and compliance risk if it's not handled by people who know the buildup.
+            and compliance risk if it&apos;s not handled by people who know the buildup.
           </p>
         </div>
 
@@ -566,7 +517,7 @@ function HowAJobRuns() {
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-slate-600">
             No guesswork on-site. Every job follows the same four stages so you know exactly
-            what's happening and when it's done.
+            what&apos;s happening and when it&apos;s done.
           </p>
         </div>
 
@@ -661,8 +612,8 @@ function QuoteBand() {
       />
       <div className="relative mx-auto max-w-3xl px-4 text-center sm:px-5">
         <h2 className="text-2xl font-extrabold leading-snug tracking-tight sm:text-3xl">
-          Grease doesn't wait for an inspection date. Get a straightforward quote from a crew
-          that's worked NEPA's kitchens and plants since 2002.
+          Grease doesn&apos;t wait for an inspection date. Get a straightforward quote from a crew
+          that&apos;s worked NEPA&apos;s kitchens and plants since 2002.
         </h2>
         <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
           <a
@@ -728,7 +679,7 @@ function GetInTouch() {
             Talk to the crew
           </h2>
           <p className="mt-4 text-lg leading-relaxed text-slate-600">
-            Call directly for the fastest response, or send over your site details and we'll
+            Call directly for the fastest response, or send over your site details and we&apos;ll
             follow up.
           </p>
         </div>
@@ -813,7 +764,7 @@ function QuoteFormSection() {
     setStatus("submitting");
     setError("");
     try {
-      const result = await submitQuote({ data: form });
+      const result = await submitQuote(form);
       if (result.ok) {
         setFirstName(form.name.split(" ")[0] || "there");
         setStatus("success");
@@ -840,7 +791,7 @@ function QuoteFormSection() {
               Request a quote
             </span>
             <h2 className="mt-3 text-3xl font-extrabold tracking-tight text-slate-900 sm:text-4xl">
-              Tell us what's building up
+              Tell us what&apos;s building up
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-slate-600">
               Send over your site details and the crew will follow up with a straightforward
@@ -872,7 +823,7 @@ function QuoteFormSection() {
                   Quote request received, {firstName}!
                 </h3>
                 <p className="mx-auto mt-3 max-w-sm leading-relaxed text-slate-600">
-                  We've got your details. The crew will call you back to confirm the scope and
+                  We&apos;ve got your details. The crew will call you back to confirm the scope and
                   get you a straightforward quote.
                 </p>
                 <p className="mt-6 text-sm font-semibold text-slate-700">
@@ -986,7 +937,7 @@ function QuoteFormSection() {
                   {status === "submitting" ? "Sending…" : "Submit Quote Request"}
                 </button>
                 <p className="text-center text-xs text-slate-500">
-                  Prefer to talk it through? Call {PHONE_DISPLAY} — that's the fastest way to
+                  Prefer to talk it through? Call {PHONE_DISPLAY} — that&apos;s the fastest way to
                   reach us.
                 </p>
               </form>

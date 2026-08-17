@@ -1,4 +1,10 @@
-import { createFileRoute } from "@tanstack/react-router";
+"use client";
+
+/* ------------------------------------------------------------------ */
+/* Content ideation engine ("/ideas").                                  */
+/* Ported 1:1 from the TanStack Start route src/routes/ideas.tsx.       */
+/* Pure client-side: templates + generator live in ~/lib/ideas-data.    */
+/* ------------------------------------------------------------------ */
 import { useEffect, useRef, useState } from "react";
 import {
   TRADES,
@@ -9,14 +15,6 @@ import {
   type Platform,
   type Trade,
 } from "~/lib/ideas-data";
-
-/* ------------------------------------------------------------------ */
-/* Route                                                               */
-/* ------------------------------------------------------------------ */
-
-export const Route = createFileRoute("/ideas")({
-  component: Ideas,
-});
 
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
@@ -52,7 +50,7 @@ const CTA_STYLES: Record<Cta, string> = {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-function Ideas() {
+export default function Ideas() {
   const [trade, setTrade] = useState<Trade>("Grease & cleanup");
   const [town, setTown] = useState("");
   const [seed, setSeed] = useState(0);
@@ -213,7 +211,7 @@ function Ideas() {
               </div>
             </div>
             <p className="mt-4 text-xs text-slate-400">
-              Ideas update as you change trade or town. Every "Generate another week" mixes in a
+              Ideas update as you change trade or town. Every &quot;Generate another week&quot; mixes in a
               fresh spread of content pillars.
             </p>
           </div>

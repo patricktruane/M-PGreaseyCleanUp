@@ -1,57 +1,51 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { useEffect, useMemo, useState } from "react";
-import type { FormEvent } from "react";
-import { readLeads, setLeadStatus } from "~/lib/leads-store";
-import { STATUSES, type Lead } from "~/lib/leads";
-import { DASHBOARD_PASSCODE } from "~/lib/config";
+"use client";
 
 /* ------------------------------------------------------------------ */
-/* Server functions — every read of lead data requires the passcode,   */
-/* so a wrong (or missing) code can never pull lead data out of the    */
-/* server, even with the page open.                                    */
+/* Leads dashboard ("/dashboard") — passcode-gated.                     */
+/* Ported 1:1 from the TanStack Start route src/routes/dashboard.tsx.   */
+/* Every read/write POSTs to a server route handler that validates the  */
+/* passcode (env-first DASHBOARD_PASSCODE, default grease-2026) — the   */
+/* passcode never ships to the client bundle.                           */
+/* ------------------------------------------------------------------ */
+import { useEffect, useMemo, useState } from "react";
+import type { FormEvent } from "react";
+import { STATUSES, type Lead } from "~/lib/leads";
+
+/* ------------------------------------------------------------------ */
+/* Server calls (createServerFn → /api/dashboard route handlers)        */
 /* ------------------------------------------------------------------ */
 
 type GateResult = { ok: true; leads: Lead[] } | { ok: false; error: string };
 
-const fetchLeads = createServerFn({ method: "POST" })
-  .validator((d: unknown) => d as { passcode: string })
-  .handler(async ({ data }): Promise<GateResult> => {
-    if (data.passcode !== DASHBOARD_PASSCODE) {
-      return { ok: false, error: "That passcode isn't right. Try again." };
-    }
-    try {
-      return { ok: true, leads: await readLeads() };
-    } catch (err) {
-      console.error("fetchLeads error:", err);
-      return { ok: false, error: "Couldn't load leads — please try again." };
-    }
-  });
+async function fetchLeads(passcode: string): Promise<GateResult> {
+  try {
+    const res = await fetch("/api/dashboard/leads", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode }),
+    });
+    return (await res.json()) as GateResult;
+  } catch {
+    return { ok: false, error: "Couldn't reach the server — please try again." };
+  }
+}
 
-const updateStatus = createServerFn({ method: "POST" })
-  .validator((d: unknown) => d as { passcode: string; id: string; status: string })
-  .handler(async ({ data }): Promise<GateResult> => {
-    if (data.passcode !== DASHBOARD_PASSCODE) {
-      return { ok: false, error: "That passcode isn't right. Try again." };
-    }
-    if (!STATUSES.includes(data.status as (typeof STATUSES)[number])) {
-      return { ok: false, error: "Invalid status." };
-    }
-    try {
-      return { ok: true, leads: await setLeadStatus(data.id, data.status) };
-    } catch (err) {
-      console.error("updateStatus error:", err);
-      return { ok: false, error: "Couldn't save the status — please try again." };
-    }
-  });
-
-/* ------------------------------------------------------------------ */
-/* Route                                                               */
-/* ------------------------------------------------------------------ */
-
-export const Route = createFileRoute("/dashboard")({
-  component: Dashboard,
-});
+async function updateStatus(
+  passcode: string,
+  id: string,
+  status: string
+): Promise<GateResult> {
+  try {
+    const res = await fetch("/api/dashboard/status", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ passcode, id, status }),
+    });
+    return (await res.json()) as GateResult;
+  } catch {
+    return { ok: false, error: "Couldn't save the status — please try again." };
+  }
+}
 
 /* ------------------------------------------------------------------ */
 /* Constants & helpers                                                 */
@@ -150,7 +144,7 @@ function downloadCsv(leads: Lead[]) {
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-function Dashboard() {
+export default function Dashboard() {
   const [attempt, setAttempt] = useState(""); // what the user typed
   const [passcode, setPasscode] = useState(""); // the code that unlocked
   const [unlocked, setUnlocked] = useState(false);
@@ -174,7 +168,7 @@ function Dashboard() {
     if (saved) {
       (async () => {
         try {
-          const res = await fetchLeads({ data: { passcode: saved } });
+          const res = await fetchLeads(saved as string);
           if (cancelled) return;
           if (res.ok) {
             setPasscode(saved as string);
@@ -204,7 +198,7 @@ function Dashboard() {
     setLoading(true);
     setError("");
     try {
-      const res = await fetchLeads({ data: { passcode: code } });
+      const res = await fetchLeads(code);
       if (res.ok) {
         try {
           window.sessionStorage.setItem(SESSION_KEY, code);
@@ -242,7 +236,7 @@ function Dashboard() {
     setSavingId(id);
     setError("");
     try {
-      const res = await updateStatus({ data: { passcode, id, status } });
+      const res = await updateStatus(passcode, id, status);
       if (res.ok) {
         setLeads(res.leads);
       } else {

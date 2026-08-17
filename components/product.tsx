@@ -1,11 +1,15 @@
-import { createFileRoute } from "@tanstack/react-router";
-import { createServerFn } from "@tanstack/react-start";
-import { useState } from "react";
-import type { FormEvent, ReactNode } from "react";
-import { appendLead } from "~/lib/leads-store";
+"use client";
 
 /* ------------------------------------------------------------------ */
-/* Server: early-access form submission                                */
+/* M&P Growth Assistant pitch ("/product").                             */
+/* Ported 1:1 from the TanStack Start route src/routes/product.tsx.     */
+/* Early-access submissions POST to /api/early-access (route handler).  */
+/* ------------------------------------------------------------------ */
+import { useState } from "react";
+import type { FormEvent, ReactNode } from "react";
+
+/* ------------------------------------------------------------------ */
+/* Early-access form submission (server fn → /api/early-access)         */
 /* ------------------------------------------------------------------ */
 
 type LeadSubmission = {
@@ -16,77 +20,20 @@ type LeadSubmission = {
   message: string;
 };
 
-// MVP storage: data/leads.json, written through the shared serialized queue in
-// ~/lib/leads-store (same write pattern the dashboard uses, so concurrent form
-// submissions and status updates can't corrupt the file). SITE.md documents the
-// path to a real database (Neon via DATABASE_URL) — migrate before traffic is
-// meaningful. These submissions are tagged source "early-access" so the
-// dashboard can tell them apart from business-site quote requests.
-
 type SubmitResult = { ok: boolean; error?: string };
 
-const submitLead = createServerFn({ method: "POST" })
-  .validator((d: unknown) => d as LeadSubmission)
-  .handler(async ({ data }): Promise<SubmitResult> => {
-    try {
-      return await doSubmit(data);
-    } catch (err) {
-      console.error("submitLead error:", err);
-      return { ok: false, error: "Something went wrong on our end — please try again." };
-    }
-  });
-
-async function doSubmit(raw: LeadSubmission): Promise<SubmitResult> {
-    const name = String(raw?.name ?? "").trim();
-    const businessType = String(raw?.businessType ?? "").trim();
-    const phone = String(raw?.phone ?? "").trim();
-    const email = String(raw?.email ?? "").trim();
-    const message = String(raw?.message ?? "").trim();
-
-    if (!name) return { ok: false, error: "Please enter your name." };
-    if (!phone && !email)
-      return {
-        ok: false,
-        error: "Add a phone number or email so we know how to reach you.",
-      };
-    if (
-      name.length > 120 ||
-      businessType.length > 120 ||
-      phone.length > 40 ||
-      email.length > 200 ||
-      message.length > 2000
-    ) {
-      return { ok: false, error: "One of the fields is too long — please shorten it and try again." };
-    }
-
-    await appendLead({
-      id: `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      name,
-      businessType,
-      phone,
-      email,
-      message,
-      createdAt: new Date().toISOString(),
-      source: "early-access",
+async function submitLead(data: LeadSubmission): Promise<SubmitResult> {
+  try {
+    const res = await fetch("/api/early-access", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(data),
     });
-
-    return { ok: true };
+    return (await res.json()) as SubmitResult;
+  } catch {
+    return { ok: false, error: "Something went wrong — please try again." };
+  }
 }
-
-/* ------------------------------------------------------------------ */
-/* Route                                                               */
-/* ------------------------------------------------------------------ */
-
-export const Route = createFileRoute("/product")({
-  head: () => ({
-    meta: [
-      {
-        title: "M&P Growth Assistant — Never Miss a Lead. Book More Jobs.",
-      },
-    ],
-  }),
-  component: Product,
-});
 
 /* ------------------------------------------------------------------ */
 /* Small building blocks                                               */
@@ -238,7 +185,7 @@ const FAQS: { q: string; a: string }[] = [
 /* Page                                                                */
 /* ------------------------------------------------------------------ */
 
-function Product() {
+export default function Product() {
   return (
     <div className="min-h-dvh bg-white text-slate-900">
       <Nav />
@@ -415,14 +362,14 @@ function SmsMock() {
 
           <div className="flex justify-end">
             <div className="max-w-[85%] rounded-2xl rounded-tr-sm bg-amber-400 px-4 py-2.5 text-sm font-medium text-slate-950">
-              Hi, I need my restaurant's grease trap cleaned. Can you come this week?
+              Hi, I need my restaurant&apos;s grease trap cleaned. Can you come this week?
             </div>
           </div>
 
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-800 px-4 py-2.5 text-sm text-slate-100">
-              Absolutely. What's the location, and about how much do you usually pay for this?
-              I'll find a time that works.
+              Absolutely. What&apos;s the location, and about how much do you usually pay for this?
+              I&apos;ll find a time that works.
             </div>
           </div>
 
@@ -446,7 +393,7 @@ function SmsMock() {
 
           <div className="flex justify-start">
             <div className="max-w-[85%] rounded-2xl rounded-tl-sm bg-slate-800 px-4 py-2.5 text-sm text-slate-100">
-              Booked for Thursday at 9:00 AM. You'll get a reminder tomorrow and 2 hours before.
+              Booked for Thursday at 9:00 AM. You&apos;ll get a reminder tomorrow and 2 hours before.
               See you then!
             </div>
           </div>
@@ -661,11 +608,11 @@ function LaunchBand() {
           Built for our own crew first
         </span>
         <blockquote className="mt-5 text-2xl font-bold leading-snug tracking-tight sm:text-3xl">
-          "We built this for M&amp;P Greasey Clean Up — our own two-truck grease and cleanup
-          operation. If it keeps our phones answered between jobs, it can do it for yours."
+          &quot;We built this for M&amp;P Greasey Clean Up — our own two-truck grease and cleanup
+          operation. If it keeps our phones answered between jobs, it can do it for yours.&quot;
         </blockquote>
         <p className="mt-6 text-slate-400">
-          We're running it as customer #1, so it's tested on real calls, real jobs, and real
+          We&apos;re running it as customer #1, so it&apos;s tested on real calls, real jobs, and real
           customers — not a demo.
         </p>
       </div>
@@ -736,7 +683,7 @@ function EarlyAccess() {
     setStatus("submitting");
     setError("");
     try {
-      const result = await submitLead({ data: form });
+      const result = await submitLead(form);
       if (result.ok) {
         setFirstName(form.name.split(" ")[0] || "there");
         setStatus("success");
@@ -766,8 +713,8 @@ function EarlyAccess() {
               Ready to stop missing leads?
             </h2>
             <p className="mt-4 text-lg leading-relaxed text-slate-600">
-              We're onboarding a small group of local service businesses right now. Tell us a
-              little about yours and we'll reach out to get you set up.
+              We&apos;re onboarding a small group of local service businesses right now. Tell us a
+              little about yours and we&apos;ll reach out to get you set up.
             </p>
             <ul className="mt-8 space-y-4">
               {[
@@ -792,10 +739,10 @@ function EarlyAccess() {
                   <CheckIcon className="h-8 w-8" />
                 </div>
                 <h3 className="mt-6 text-2xl font-extrabold text-slate-900">
-                  You're on the list, {firstName}!
+                  You&apos;re on the list, {firstName}!
                 </h3>
                 <p className="mx-auto mt-3 max-w-sm text-slate-600">
-                  Thanks for your interest. We'll reach out when it's your turn to get set up.
+                  Thanks for your interest. We&apos;ll reach out when it&apos;s your turn to get set up.
                 </p>
                 <p className="mt-6 text-xs text-slate-400">
                   No spam — just a real conversation about your business.
@@ -906,7 +853,7 @@ function EarlyAccess() {
                   {status === "submitting" ? "Sending…" : "Get early access"}
                 </button>
                 <p className="text-center text-xs text-slate-400">
-                  You're joining the list — nothing more. We'll reach out when it's your turn.
+                  You&apos;re joining the list — nothing more. We&apos;ll reach out when it&apos;s your turn.
                 </p>
               </form>
             )}
