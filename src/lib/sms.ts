@@ -212,6 +212,14 @@ export function pickReply(isFirstContact: boolean): string {
   return isFirstContact ? REPLY_FIRST_CONTACT : REPLY_FOLLOW_UP;
 }
 
+/** Merge two scores, keeping the hotter one (an emergency stated earlier
+ *  must not downgrade because a follow-up question lacks urgency words). */
+export function mergeScores(a: LeadScore | null | undefined, b: LeadScore): LeadScore {
+  if (!a) return b;
+  const rank: Record<LeadScore, number> = { hot: 3, warm: 2, cold: 1 };
+  return rank[a] >= rank[b] ? a : b;
+}
+
 /** TwiML envelope Twilio uses to send the reply SMS. */
 export function twimlReply(body: string): string {
   const escaped = body.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");

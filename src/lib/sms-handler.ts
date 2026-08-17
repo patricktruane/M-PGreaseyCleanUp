@@ -10,6 +10,7 @@ import {
   pickReply,
   twimlReply,
   normalizePhone,
+  mergeScores,
 } from "./sms";
 import type { SmsMessage } from "./leads";
 
@@ -68,8 +69,9 @@ export function isSignatureValid(
   params: Record<string, string>,
   signature: string | null
 ): boolean {
+  // Not configured → skip the check entirely (endpoint stays live-but-dormant).
+  if (!TWILIO_AUTH_TOKEN) return true;
   if (!signature) return false;
-  if (!TWILIO_AUTH_TOKEN) return true; // not configured → skip check
   const canonical = new URL(request.url);
   canonical.search = ""; // Twilio hashes the URL *without* the query string
   const sorted = Object.keys(params)
@@ -124,6 +126,11 @@ export async function handleInboundSms(msg: TwilioInboundSms): Promise<SmsWebhoo
   const qualified = qualifyMessage(body);
   const isFirstContact = !existing;
   const reply = pickReply(isFirstContact);
+  // Score is the conversation max — never downgrade an earlier emergency.
+  const score = mergeScores(
+    (existing?.score as "hot" | "warm" | "cold" | undefined) ?? null,
+    qualified.score
+  );
 
   const inbound: SmsMessage = { direction: "inbound", body, at: now, messageSid: sid };
   const outbound: SmsMessage = { direction: "outbound", body: reply, at: now };
@@ -132,7 +139,7 @@ export async function handleInboundSms(msg: TwilioInboundSms): Promise<SmsWebhoo
     phone: msg.from,
     inbound,
     outbound,
-    score: qualified.score,
+    score,
     businessType: qualified.businessType,
   });
 
