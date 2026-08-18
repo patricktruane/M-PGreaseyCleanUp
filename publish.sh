@@ -13,6 +13,11 @@ cd "$(dirname "$0")"
 # Group-writable so any team member can publish over another member's build.
 umask 002
 mkdir -p .run
+# .next must be a REAL directory inside the workspace: the platform's Publish
+# flow (build + start) cannot resolve a symlink into /opt/site-store, so if a
+# previous environment left a symlink here, drop it so `next build` writes a
+# real build directory that `next start` (and the platform) can find.
+if [ -L .next ]; then rm .next; fi
 # The workspace starts as sources only (the coming-soon placeholder serves from
 # the image's pre-built copy), so the first publish installs deps here. No-op
 # once node_modules is current.
